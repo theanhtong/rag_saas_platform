@@ -1,4 +1,4 @@
-name: LLM API Gateway CI/CD Pipeline
+name: Gateway CI Pipeline
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint-and-test:
-    name: Linting & Unit Testing
+    name: Lint and Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -24,11 +24,11 @@ jobs:
         with:
           version: v1.56.2
 
-      - name: Run Unit Tests with Mocks
+      - name: Run Unit Tests
         run: go test -v -race -coverprofile=coverage.out ./...
 
   integration-e2e:
-    name: Integration & k6 Load Testing
+    name: Integration and Load Testing
     needs: lint-and-test
     runs-on: ubuntu-latest
     services:
@@ -45,13 +45,13 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Build & Run Gateway Server
+      - name: Build and Run Gateway Server
         run: |
           go build -o gateway ./cmd/gateway
           ./gateway &
           sleep 3
 
-      - name: Install k6 (Load Testing Tool)
+      - name: Install k6 Load Testing Tool
         run: |
           sudo gpg -k
           sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
@@ -59,11 +59,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y k6
 
-      - name: Run k6 E2E Test (Validate Cache Hit < 5ms & HTTP 429 Rate Limit)
+      - name: Run k6 E2E Test
         run: k6 run scripts/load_test.js
 
   security-scan-and-build:
-    name: Container Build & Security Scan
+    name: Container Build and Security Scan
     needs: integration-e2e
     runs-on: ubuntu-latest
     steps:

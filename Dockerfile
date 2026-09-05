@@ -3,8 +3,8 @@ FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 
-# install build dependencies
-RUN apk add --no-cache git
+# set GOPROXY fallback
+ENV GOPROXY=https://proxy.golang.org,direct
 
 # copy dependency specs
 COPY go.mod go.sum ./
