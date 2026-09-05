@@ -1,0 +1,24 @@
+# Binaries
+gateway
+*.exe
+*.exe.*
+*.out
+*.app
+
+# Environment variables & secrets
+.env
+*.pem
+*.key
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Vendor & dependencies
+vendor/
+
+# Test & coverage
+coverage.out
+coverage.html

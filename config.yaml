@@ -1,0 +1,24 @@
+server:
+  port: 8080
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+vector_service:
+  addr: "localhost:50051"
+  timeout_ms: 3000
+
+rate_limit:
+  tpm: 10000
+  rpm: 60
+
+semantic_cache:
+  similarity_threshold: 0.85
+  ttl_seconds: 3600
+
+providers:
+  openai_api_key: ""
+  gemini_api_key: ""
+  timeout_seconds: 3
