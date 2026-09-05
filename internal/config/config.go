@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"os"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -32,8 +33,8 @@ type VectorServiceConfig struct {
 }
 
 type RateLimitConfig struct {
-	TPM int64 `mapstructure:"tpm"` // Tokens per minute
-	RPM int64 `mapstructure:"rpm"` // Requests per minute
+	TPM int64 `mapstructure:"tpm"` // tokens per minute
+	RPM int64 `mapstructure:"rpm"` // requests per minute
 }
 
 type SemanticCacheConfig struct {
@@ -55,7 +56,11 @@ func LoadConfig(path string) (*Config, error) {
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	// Default fallback values
+	_ = v.BindEnv("providers.openai_api_key", "OPENAI_API_KEY")
+	_ = v.BindEnv("providers.gemini_api_key", "GEMINI_API_KEY")
+	_ = v.BindEnv("redis.addr", "REDIS_ADDR")
+
+	// default fallback values
 	v.SetDefault("server.port", 8080)
 	v.SetDefault("redis.addr", "localhost:6379")
 	v.SetDefault("vector_service.addr", "localhost:50051")
@@ -76,6 +81,13 @@ func LoadConfig(path string) (*Config, error) {
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
+	}
+
+	if cfg.Providers.OpenAIAPIKey == "" {
+		cfg.Providers.OpenAIAPIKey = os.Getenv("OPENAI_API_KEY")
+	}
+	if cfg.Providers.GeminiAPIKey == "" {
+		cfg.Providers.GeminiAPIKey = os.Getenv("GEMINI_API_KEY")
 	}
 
 	return &cfg, nil

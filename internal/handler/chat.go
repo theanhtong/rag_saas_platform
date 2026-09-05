@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -255,11 +256,39 @@ func (h *ChatHandler) respondNonStream(c *gin.Context, model string, ch <-chan r
 	})
 }
 
-// generatePromptEmbedding computes a normalized float32 vector embedding for semantic search.
+// generatePromptEmbedding computes a 16-dimensional unit-normalized vector embedding based on prompt tokens.
 func generatePromptEmbedding(text string) []float32 {
-	var hash float32 = 0
-	for _, ch := range text {
-		hash += float32(ch)
+	vec := make([]float32, 16)
+	words := strings.Fields(strings.ToLower(text))
+	if len(words) == 0 {
+		return vec
 	}
-	return []float32{hash / 1000.0, 0.5, 0.25, 0.1}
+
+	for _, word := range words {
+		word = strings.Trim(word, "!?,.:;\"'()")
+		if len(word) == 0 {
+			continue
+		}
+		var h uint32 = 2166136261
+		for i := 0; i < len(word); i++ {
+			h ^= uint32(word[i])
+			h *= 16777619
+		}
+		idx := int(h % 16)
+		vec[idx] += 1.0
+	}
+
+	var norm float64 = 0.0
+	for _, val := range vec {
+		norm += float64(val) * float64(val)
+	}
+
+	if norm > 0 {
+		mag := float32(math.Sqrt(norm))
+		for i := range vec {
+			vec[i] /= mag
+		}
+	}
+
+	return vec
 }

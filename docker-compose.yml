@@ -12,6 +12,8 @@ services:
       - CONFIG_PATH=config.yaml
       - REDIS_ADDR=redis:6379
       - VECTOR_SERVICE_ADDR=vector_service:50051
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       - redis
     restart: always
@@ -26,7 +28,7 @@ services:
 
   vector_service:
     image: alpine:3.19
-    container_name: mock_vector_service
+    container_name: vector_service
     command: tail -f /dev/null
     ports:
       - "50051:50051"
