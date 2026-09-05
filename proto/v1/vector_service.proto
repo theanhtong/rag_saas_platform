@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package vector.v1;
+
+option go_package = "github.com/theanhtong/llm_api_gateway/pkg/pb/v1;pbv1";
+
+// VectorService handles low-latency vector indexing and similarity search.
+service VectorService {
+  // SearchSimilarVectors finds top-K most similar vectors to a query embedding.
+  rpc SearchSimilarVectors(SearchRequest) returns (SearchResponse);
+
+  // InsertBatch adds a batch of vector embeddings into the system.
+  rpc InsertBatch(InsertBatchRequest) returns (InsertBatchResponse);
+}
+
+// VectorRecord represents a vector embedding item with ID and metadata.
+message VectorRecord {
+  string id = 1;
+  repeated float values = 2;
+  map<string, string> metadata = 3;
+}
+
+// SearchRequest defines parameters for a similarity search.
+message SearchRequest {
+  repeated float vector = 1;
+  int32 top_k = 2;
+  map<string, string> filter = 3;
+}
+
+// SearchResult represents a single search hit with distance score.
+message SearchResult {
+  string id = 1;
+  float score = 2;
+  repeated float vector = 3;
+  map<string, string> metadata = 4;
+}
+
+// SearchResponse contains matched vector results and SLA metrics.
+message SearchResponse {
+  repeated SearchResult results = 1;
+  int64 execution_time_us = 2;
+}
+
+// InsertBatchRequest defines a batch of vector records for insertion.
+message InsertBatchRequest {
+  repeated VectorRecord records = 1;
+}
+
+// InsertBatchResponse indicates insertion result status.
+message InsertBatchResponse {
+  int32 inserted_count = 1;
+  bool success = 2;
+}
