@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: llm_api_gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - CONFIG_PATH=config.yaml
+      - REDIS_ADDR=redis:6379
+      - VECTOR_SERVICE_ADDR=vector_service:50051
+    depends_on:
+      - redis
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: gateway_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel notice
+    restart: always
+
+  vector_service:
+    image: alpine:3.19
+    container_name: mock_vector_service
+    command: tail -f /dev/null
+    ports:
+      - "50051:50051"
