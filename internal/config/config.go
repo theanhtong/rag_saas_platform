@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -66,9 +67,9 @@ func LoadConfig(path string) (*Config, error) {
 	v.SetDefault("providers.timeout_seconds", 3)
 
 	if err := v.ReadInConfig(); err != nil {
-		// If config file not found, proceed with default values and env vars
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			// Ignore missing file error if we rely on env vars
+		var configFileNotFoundErr viper.ConfigFileNotFoundError
+		if !errors.As(err, &configFileNotFoundErr) {
+			return nil, err
 		}
 	}
 
