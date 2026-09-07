@@ -261,9 +261,9 @@ func synthesizeRAGResponse(prompt string) string {
 			}
 		}
 		if len(contextLines) > 0 {
-			return fmt.Sprintf("Based on the ingested enterprise security policy:\n\n%s", strings.Join(contextLines, "\n\n"))
+			return fmt.Sprintf("[Local SLM fallback] Based on the ingested enterprise security policy:\n\n%s", strings.Join(contextLines, "\n\n"))
 		}
 	}
-	return "Based on enterprise security guidelines, all passwords must be at least 16 characters long and include uppercase, lowercase, numbers, and special symbols."
+	return fmt.Sprintf("[Local SLM fallback] Response for: %s", prompt)
 }
 
