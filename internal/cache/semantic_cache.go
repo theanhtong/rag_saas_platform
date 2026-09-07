@@ -9,7 +9,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/theanhtong/llm_api_gateway/internal/config"
+	"github.com/theanhtong/rag_system/internal/config"
 )
 
 type CachedResponse struct {

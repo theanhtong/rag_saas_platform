@@ -26,9 +26,21 @@ services:
     command: redis-server --save 60 1 --loglevel notice
     restart: always
 
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: gateway_redis_commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    restart: always
+
   vector_service:
     image: alpine:3.19
     container_name: vector_service
     command: tail -f /dev/null
     ports:
       - "50051:50051"
+

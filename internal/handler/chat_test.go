@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/theanhtong/llm_api_gateway/internal/cache"
-	"github.com/theanhtong/llm_api_gateway/internal/config"
-	"github.com/theanhtong/llm_api_gateway/internal/router"
+	"github.com/theanhtong/rag_system/internal/cache"
+	"github.com/theanhtong/rag_system/internal/config"
+	"github.com/theanhtong/rag_system/internal/router"
 )
 
 func TestChatHandler_HandleChatCompletions(t *testing.T) {

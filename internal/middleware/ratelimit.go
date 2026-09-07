@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/theanhtong/llm_api_gateway/internal/config"
+	"github.com/theanhtong/rag_system/internal/config"
 )
 
 // tokenBucketLuaScript performs atomic token & request rate limiting in Redis.

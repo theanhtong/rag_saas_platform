@@ -12,9 +12,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/theanhtong/llm_api_gateway/internal/cache"
-	"github.com/theanhtong/llm_api_gateway/internal/client"
-	"github.com/theanhtong/llm_api_gateway/internal/router"
+	"github.com/theanhtong/rag_system/internal/cache"
+	"github.com/theanhtong/rag_system/internal/client"
+	"github.com/theanhtong/rag_system/internal/router"
 )
 
 // ChatMessage represents an individual message in a chat conversation request.

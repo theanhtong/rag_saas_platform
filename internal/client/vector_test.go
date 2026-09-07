@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/theanhtong/llm_api_gateway/internal/config"
-	pbv1 "github.com/theanhtong/llm_api_gateway/pkg/pb/v1"
+	"github.com/theanhtong/rag_system/internal/config"
+	pbv1 "github.com/theanhtong/rag_system/pkg/pb/v1"
 )
 
 type mockVectorServer struct {

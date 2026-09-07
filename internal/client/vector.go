@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/theanhtong/llm_api_gateway/internal/config"
-	pbv1 "github.com/theanhtong/llm_api_gateway/pkg/pb/v1"
+	"github.com/theanhtong/rag_system/internal/config"
+	pbv1 "github.com/theanhtong/rag_system/pkg/pb/v1"
 )
 
 type VectorClient interface {

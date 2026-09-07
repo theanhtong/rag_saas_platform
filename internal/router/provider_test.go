@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/theanhtong/llm_api_gateway/internal/config"
+	"github.com/theanhtong/rag_system/internal/config"
 )
 
 func TestProviderRouter_FallbackToLocalSLM(t *testing.T) {

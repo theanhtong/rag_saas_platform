@@ -1,4 +1,4 @@
-module github.com/theanhtong/llm_api_gateway
+module github.com/theanhtong/rag_system
 
 go 1.22.0
 

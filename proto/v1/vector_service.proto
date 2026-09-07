@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package vector.v1;
 
-option go_package = "github.com/theanhtong/llm_api_gateway/pkg/pb/v1;pbv1";
+option go_package = "github.com/theanhtong/rag_system/pkg/pb/v1;pbv1";
 
 // VectorService handles low-latency vector indexing and similarity search.
 service VectorService {

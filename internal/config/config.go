@@ -15,6 +15,7 @@ type Config struct {
 	RateLimit     RateLimitConfig     `mapstructure:"rate_limit"`
 	SemanticCache SemanticCacheConfig `mapstructure:"semantic_cache"`
 	Providers     ProvidersConfig     `mapstructure:"providers"`
+	Embedding     EmbeddingConfig     `mapstructure:"embedding"`
 }
 
 type ServerConfig struct {
@@ -48,6 +49,14 @@ type ProvidersConfig struct {
 	TimeoutSeconds int    `mapstructure:"timeout_seconds"`
 }
 
+type EmbeddingConfig struct {
+	Provider   string `mapstructure:"provider"`
+	Model      string `mapstructure:"model"`
+	Dimensions int    `mapstructure:"dimensions"`
+	Endpoint   string `mapstructure:"endpoint"`
+	APIKey     string `mapstructure:"api_key"`
+}
+
 func LoadConfig(path string) (*Config, error) {
 	v := viper.New()
 
@@ -70,6 +79,10 @@ func LoadConfig(path string) (*Config, error) {
 	v.SetDefault("semantic_cache.similarity_threshold", 0.85)
 	v.SetDefault("semantic_cache.ttl_seconds", 3600)
 	v.SetDefault("providers.timeout_seconds", 3)
+	v.SetDefault("embedding.provider", "ollama")
+	v.SetDefault("embedding.model", "all-minilm")
+	v.SetDefault("embedding.dimensions", 384)
+	v.SetDefault("embedding.endpoint", "http://localhost:11434/api/embeddings")
 
 	if err := v.ReadInConfig(); err != nil {
 		var configFileNotFoundErr viper.ConfigFileNotFoundError

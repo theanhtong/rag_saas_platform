@@ -13,12 +13,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/theanhtong/llm_api_gateway/internal/cache"
-	"github.com/theanhtong/llm_api_gateway/internal/client"
-	"github.com/theanhtong/llm_api_gateway/internal/config"
-	"github.com/theanhtong/llm_api_gateway/internal/handler"
-	"github.com/theanhtong/llm_api_gateway/internal/middleware"
-	"github.com/theanhtong/llm_api_gateway/internal/router"
+	"github.com/theanhtong/rag_system/internal/cache"
+	"github.com/theanhtong/rag_system/internal/client"
+	"github.com/theanhtong/rag_system/internal/config"
+	"github.com/theanhtong/rag_system/internal/handler"
+	"github.com/theanhtong/rag_system/internal/middleware"
+	"github.com/theanhtong/rag_system/internal/router"
 )
 
 func main() {
