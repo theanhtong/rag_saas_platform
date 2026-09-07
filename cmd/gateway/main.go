@@ -16,7 +16,9 @@ import (
 	"github.com/theanhtong/rag_system/internal/cache"
 	"github.com/theanhtong/rag_system/internal/client"
 	"github.com/theanhtong/rag_system/internal/config"
+	"github.com/theanhtong/rag_system/internal/embedder"
 	"github.com/theanhtong/rag_system/internal/handler"
+	"github.com/theanhtong/rag_system/internal/ingest"
 	"github.com/theanhtong/rag_system/internal/middleware"
 	"github.com/theanhtong/rag_system/internal/router"
 )
@@ -50,11 +52,17 @@ func main() {
 	}
 
 	// initialize core components
+	embeddingService := embedder.NewEmbeddingService(&cfg.Embedding)
 	semanticCache := cache.NewSemanticCache(rdb, &cfg.SemanticCache)
 	providerRouter := router.NewProviderRouter(&cfg.Providers)
 
+	// initialize ingestion pipeline
+	chunker := ingest.NewChunker()
+	ingestionPipeline := ingest.NewPipeline(chunker, embeddingService, vectorClient)
+
 	// initialize HTTP handlers and rate limiter
-	chatHandler := handler.NewChatHandler(vectorClient, semanticCache, providerRouter)
+	chatHandler := handler.NewChatHandler(vectorClient, semanticCache, providerRouter, embeddingService)
+	docHandler := handler.NewDocumentHandler(ingestionPipeline)
 	rateLimiter := middleware.NewRateLimiter(rdb, &cfg.RateLimit)
 
 	// setup Gin engine and global middlewares
@@ -76,6 +84,8 @@ func main() {
 	v1.Use(rateLimiter.Middleware())
 	{
 		v1.POST("/chat/completions", chatHandler.HandleChatCompletions)
+		v1.POST("/documents/ingest", docHandler.HandleIngest)
+		v1.GET("/documents", docHandler.HandleListDocuments)
 	}
 
 	serverAddr := fmt.Sprintf(":%d", cfg.Server.Port)

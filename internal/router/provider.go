@@ -1,8 +1,13 @@
 package router
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -105,20 +110,73 @@ func (r *providerRouter) tryOpenAI(ctx context.Context, prompt string, timeout t
 
 func (r *providerRouter) tryGemini(ctx context.Context, prompt string, timeout time.Duration) (<-chan ProviderStreamChunk, error) {
 	res, err := r.geminiCB.Execute(func() (interface{}, error) {
-		if r.cfg.GeminiAPIKey == "" {
+		apiKey := strings.TrimSpace(r.cfg.GeminiAPIKey)
+		if apiKey == "" {
 			return nil, errors.New("gemini api key unconfigured")
 		}
+
 		ch := make(chan ProviderStreamChunk)
 		go func() {
 			defer close(ch)
-			tokens := []string{"[Gemini] ", "Fallback ", "response: ", prompt}
-			for _, t := range tokens {
+
+			url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=%s", apiKey)
+			reqBody := map[string]interface{}{
+				"contents": []map[string]interface{}{
+					{
+						"parts": []map[string]interface{}{
+							{"text": prompt},
+						},
+					},
+				},
+			}
+
+			jsonBytes, err := json.Marshal(reqBody)
+			if err != nil {
+				ch <- ProviderStreamChunk{Error: err}
+				return
+			}
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBytes))
+			if err != nil {
+				ch <- ProviderStreamChunk{Error: err}
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
+
+			httpClient := &http.Client{Timeout: timeout}
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				ch <- ProviderStreamChunk{Error: err}
+				return
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				ch <- ProviderStreamChunk{Error: fmt.Errorf("gemini api error (status %d): %s", resp.StatusCode, string(bodyBytes))}
+				return
+			}
+
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				ch <- ProviderStreamChunk{Error: fmt.Errorf("failed to read gemini response body: %v", err)}
+				return
+			}
+
+			genText, err := extractGeminiText(bodyBytes)
+			if err != nil {
+				ch <- ProviderStreamChunk{Error: err}
+				return
+			}
+
+			words := strings.Fields(genText)
+			for _, w := range words {
 				select {
 				case <-ctx.Done():
 					ch <- ProviderStreamChunk{Error: ctx.Err()}
 					return
-				case ch <- ProviderStreamChunk{Text: t}:
-					time.Sleep(20 * time.Millisecond)
+				case ch <- ProviderStreamChunk{Text: w + " "}:
+					time.Sleep(15 * time.Millisecond)
 				}
 			}
 		}()
@@ -130,6 +188,47 @@ func (r *providerRouter) tryGemini(ctx context.Context, prompt string, timeout t
 	}
 
 	return res.(chan ProviderStreamChunk), nil
+}
+
+func extractGeminiText(data []byte) (string, error) {
+	var resp struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+
+	if err := json.Unmarshal(data, &resp); err == nil && len(resp.Candidates) > 0 {
+		for _, part := range resp.Candidates[0].Content.Parts {
+			if strings.TrimSpace(part.Text) != "" {
+				return part.Text, nil
+			}
+		}
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err == nil {
+		if candidates, ok := raw["candidates"].([]interface{}); ok && len(candidates) > 0 {
+			if firstCand, ok := candidates[0].(map[string]interface{}); ok {
+				if content, ok := firstCand["content"].(map[string]interface{}); ok {
+					if parts, ok := content["parts"].([]interface{}); ok {
+						for _, p := range parts {
+							if partMap, ok := p.(map[string]interface{}); ok {
+								if txt, ok := partMap["text"].(string); ok && strings.TrimSpace(txt) != "" {
+									return txt, nil
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("could not extract text from gemini response: %s", string(data))
 }
 
 func (r *providerRouter) tryLocalSLM(ctx context.Context, prompt string) (<-chan ProviderStreamChunk, error) {

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   gateway:
     build:
@@ -53,6 +51,9 @@ services:
       - POSTGRES_DB=rag_db
     ports:
       - "5432:5432"
+    volumes:
+      - ./scripts/init_vector_db.sql:/docker-entrypoint-initdb.d/init.sql
     restart: always
+
 
 

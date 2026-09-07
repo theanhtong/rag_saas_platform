@@ -16,6 +16,7 @@ import (
 
 	"github.com/theanhtong/rag_system/internal/cache"
 	"github.com/theanhtong/rag_system/internal/config"
+	"github.com/theanhtong/rag_system/internal/embedder"
 	"github.com/theanhtong/rag_system/internal/router"
 )
 
@@ -32,7 +33,8 @@ func TestChatHandler_HandleChatCompletions(t *testing.T) {
 		TTLSeconds:          3600,
 	})
 	pr := router.NewProviderRouter(&config.ProvidersConfig{})
-	chatHandler := NewChatHandler(nil, sc, pr)
+	emb := embedder.NewEmbeddingService(nil)
+	chatHandler := NewChatHandler(nil, sc, pr, emb)
 
 	engine := gin.New()
 	engine.POST("/v1/chat/completions", chatHandler.HandleChatCompletions)
