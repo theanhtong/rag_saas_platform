@@ -44,3 +44,15 @@ services:
     ports:
       - "50051:50051"
 
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: rag_postgres
+    environment:
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_db
+    ports:
+      - "5432:5432"
+    restart: always
+
+

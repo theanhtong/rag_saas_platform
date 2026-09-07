@@ -15,6 +15,7 @@ import (
 
 type VectorClient interface {
 	SearchSimilarVectors(ctx context.Context, vector []float32, topK int32) (*pbv1.SearchResponse, error)
+	InsertBatch(ctx context.Context, records []*pbv1.VectorRecord) (*pbv1.InsertBatchResponse, error)
 	Close() error
 }
 
@@ -81,6 +82,33 @@ func (c *vectorClient) SearchSimilarVectors(ctx context.Context, vector []float3
 	}
 
 	return result.(*pbv1.SearchResponse), nil
+}
+
+func (c *vectorClient) InsertBatch(ctx context.Context, records []*pbv1.VectorRecord) (*pbv1.InsertBatchResponse, error) {
+	if len(records) == 0 {
+		return &pbv1.InsertBatchResponse{InsertedCount: 0, Success: true}, nil
+	}
+
+	result, err := c.cb.Execute(func() (interface{}, error) {
+		reqCtx, cancel := context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+
+		req := &pbv1.InsertBatchRequest{
+			Records: records,
+		}
+
+		resp, err := c.grpcClient.InsertBatch(reqCtx, req)
+		if err != nil {
+			return nil, err
+		}
+		return resp, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("vector service insert batch failed: %w", err)
+	}
+
+	return result.(*pbv1.InsertBatchResponse), nil
 }
 
 func (c *vectorClient) Close() error {
