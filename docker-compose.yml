@@ -36,11 +36,21 @@ services:
     restart: always
 
   vector_service:
-    image: alpine:3.19
+    build:
+      context: .
+      dockerfile: cmd/vector_service/Dockerfile
     container_name: vector_service
-    command: tail -f /dev/null
     ports:
       - "50051:50051"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_db
+    depends_on:
+      - postgres
+    restart: always
 
   postgres:
     image: pgvector/pgvector:pg16

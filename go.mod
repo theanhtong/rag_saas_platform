@@ -5,6 +5,7 @@ go 1.22.0
 require (
 	github.com/alicebob/miniredis/v2 v2.39.0
 	github.com/gin-gonic/gin v1.9.1
+	github.com/lib/pq v1.12.3
 	github.com/redis/go-redis/v9 v9.5.1
 	github.com/sony/gobreaker v1.0.0
 	github.com/spf13/viper v1.18.2
