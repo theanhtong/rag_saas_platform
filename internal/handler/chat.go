@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"strings"
@@ -210,6 +211,25 @@ func (h *ChatHandler) streamLiveResponse(c *gin.Context, model string, ch <-chan
 		}
 
 		if chunk.Error != nil {
+			log.Printf("[STREAM ERROR] %v", chunk.Error)
+			errPayload := ChatCompletionChunk{
+				ID:      reqID,
+				Object:  "chat.completion.chunk",
+				Created: time.Now().Unix(),
+				Model:   model,
+				Choices: []ChatCompletionChunkChoice{
+					{
+						Index: 0,
+						Delta: struct {
+							Content string `json:"content,omitempty"`
+							Role    string `json:"role,omitempty"`
+						}{Content: "Error: " + chunk.Error.Error()},
+					},
+				},
+			}
+			data, _ := json.Marshal(errPayload)
+			c.SSEvent("", " "+string(data))
+			c.SSEvent("", " [DONE]")
 			return false
 		}
 
@@ -320,9 +340,9 @@ func (h *ChatHandler) respondNonStream(c *gin.Context, model string, ch <-chan r
 	})
 }
 
-// generatePromptEmbedding computes a 16-dimensional unit-normalized vector embedding based on prompt tokens.
+// generatePromptEmbedding computes a 384-dimensional unit-normalized vector embedding based on prompt tokens.
 func generatePromptEmbedding(text string) []float32 {
-	vec := make([]float32, 16)
+	vec := make([]float32, 384)
 	words := strings.Fields(strings.ToLower(text))
 	if len(words) == 0 {
 		return vec
@@ -338,7 +358,7 @@ func generatePromptEmbedding(text string) []float32 {
 			h ^= uint32(word[i])
 			h *= 16777619
 		}
-		idx := int(h % 16)
+		idx := int(h % 384)
 		vec[idx] += 1.0
 	}
 
