@@ -74,31 +74,46 @@ func NewRateLimiter(rdb *redis.Client, cfg *config.RateLimitConfig) *RateLimiter
 
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		apiKey := c.GetHeader("X-API-Key")
-		if apiKey == "" {
-			apiKey = c.ClientIP()
+		// extract tenant id or fallback to api key / client ip
+		rateLimitKey := c.GetString("tenant_id")
+		if rateLimitKey == "" {
+			rateLimitKey = c.GetHeader("X-API-Key")
+		}
+		if rateLimitKey == "" {
+			rateLimitKey = c.ClientIP()
+		}
+
+		// support dynamic per-tenant tier limits if set in gin context
+		maxRPM := rl.cfg.RPM
+		if customRPM := c.GetInt64("rate_limit_rpm"); customRPM > 0 {
+			maxRPM = customRPM
+		}
+
+		maxTPM := rl.cfg.TPM
+		if customTPM := c.GetInt64("rate_limit_tpm"); customTPM > 0 {
+			maxTPM = customTPM
 		}
 
 		now := time.Now().Unix()
-		estimatedTokens := int64(100) // Default estimated prompt tokens per request
+		estimatedTokens := int64(100) // default estimated prompt tokens per request
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 		defer cancel()
 
-		rpmKey := "ratelimit:" + apiKey + ":rpm"
-		tpmKey := "ratelimit:" + apiKey + ":tpm"
+		rpmKey := "ratelimit:" + rateLimitKey + ":rpm"
+		tpmKey := "ratelimit:" + rateLimitKey + ":tpm"
 
 		res, err := rl.luaScript.Run(ctx, rl.redisClient,
 			[]string{rpmKey, tpmKey},
-			rl.cfg.RPM,
-			rl.cfg.TPM,
+			maxRPM,
+			maxTPM,
 			estimatedTokens,
 			now,
 			60,
 		).Result()
 
 		if err != nil {
-			// If Redis is temporarily down, log warning and allow request (fail open)
+			// if Redis is temporarily down, log warning and allow request (fail open)
 			c.Next()
 			return
 		}
@@ -121,9 +136,9 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 			remTPM = 0
 		}
 
-		c.Header("X-RateLimit-Limit-Requests", strconv.FormatInt(rl.cfg.RPM, 10))
+		c.Header("X-RateLimit-Limit-Requests", strconv.FormatInt(maxRPM, 10))
 		c.Header("X-RateLimit-Remaining-Requests", strconv.FormatInt(remRPM, 10))
-		c.Header("X-RateLimit-Limit-Tokens", strconv.FormatInt(rl.cfg.TPM, 10))
+		c.Header("X-RateLimit-Limit-Tokens", strconv.FormatInt(maxTPM, 10))
 		c.Header("X-RateLimit-Remaining-Tokens", strconv.FormatInt(remTPM, 10))
 		c.Header("X-RateLimit-Reset", strconv.FormatInt(resetSec, 10))
 

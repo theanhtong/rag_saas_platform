@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/theanhtong/rag_system/internal/cache"
 	"github.com/theanhtong/rag_system/internal/ingest"
 )
 
@@ -14,13 +15,15 @@ import (
 type DocumentHandler struct {
 	pipeline ingest.Pipeline
 	queue    ingest.IngestQueue
+	cache    cache.SemanticCache
 }
 
 // NewDocumentHandler constructs a new DocumentHandler instance.
-func NewDocumentHandler(p ingest.Pipeline, q ingest.IngestQueue) *DocumentHandler {
+func NewDocumentHandler(p ingest.Pipeline, q ingest.IngestQueue, sc cache.SemanticCache) *DocumentHandler {
 	return &DocumentHandler{
 		pipeline: p,
 		queue:    q,
+		cache:    sc,
 	}
 }
 
@@ -115,6 +118,15 @@ func (h *DocumentHandler) HandleIngest(c *gin.Context) {
 
 	if filename == "" {
 		filename = "uploaded_doc.txt"
+	}
+
+	// invalidate semantic cache for current tenant when new document is ingested
+	tenantID := c.GetString("tenant_id")
+	if tenantID == "" {
+		tenantID = "global"
+	}
+	if h.cache != nil {
+		_ = h.cache.InvalidateTenantCache(c.Request.Context(), tenantID)
 	}
 
 	// if queue is configured, enqueue for asynchronous background processing
