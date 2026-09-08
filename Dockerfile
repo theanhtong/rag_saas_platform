@@ -4,7 +4,7 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
 # set GOPROXY fallback
-ENV GOPROXY=https://goproxy.io,https://proxy.golang.org,direct
+ENV GOPROXY=https://proxy.golang.org,direct
 
 # download dependencies
 COPY go.mod go.sum ./
