@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/theanhtong/rag_system/internal/cache"
@@ -59,12 +60,22 @@ func main() {
 
 	// initialize ingestion pipeline
 	chunker := ingest.NewChunker()
-	ingestionPipeline := ingest.NewPipeline(chunker, embeddingService, vectorClient)
+	ingestionPipeline := ingest.NewPipeline(chunker, embeddingService, vectorClient, rdb)
+
+	// initialize asynq queue client for background task management
+	asynqClient := asynq.NewClient(asynq.RedisClientOpt{
+		Addr:     cfg.Redis.Addr,
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+	})
+	defer asynqClient.Close()
+
+	ingestQueue := ingest.NewIngestQueue(asynqClient, rdb)
 
 	// initialize HTTP handlers, quota service and rate limiter
 	quotaService := service.NewQuotaService(rdb)
 	chatHandler := handler.NewChatHandler(vectorClient, semanticCache, providerRouter, embeddingService)
-	docHandler := handler.NewDocumentHandler(ingestionPipeline)
+	docHandler := handler.NewDocumentHandler(ingestionPipeline, ingestQueue)
 	rateLimiter := middleware.NewRateLimiter(rdb, &cfg.RateLimit)
 
 	// setup Gin engine and global middlewares
@@ -88,6 +99,7 @@ func main() {
 	{
 		v1.POST("/chat/completions", chatHandler.HandleChatCompletions)
 		v1.POST("/documents/ingest", docHandler.HandleIngest)
+		v1.GET("/documents/tasks/:id", docHandler.HandleGetTaskStatus)
 		v1.GET("/documents", docHandler.HandleListDocuments)
 	}
 

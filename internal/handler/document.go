@@ -13,11 +13,15 @@ import (
 // DocumentHandler manages document ingestion HTTP endpoints.
 type DocumentHandler struct {
 	pipeline ingest.Pipeline
+	queue    ingest.IngestQueue
 }
 
 // NewDocumentHandler constructs a new DocumentHandler instance.
-func NewDocumentHandler(p ingest.Pipeline) *DocumentHandler {
-	return &DocumentHandler{pipeline: p}
+func NewDocumentHandler(p ingest.Pipeline, q ingest.IngestQueue) *DocumentHandler {
+	return &DocumentHandler{
+		pipeline: p,
+		queue:    q,
+	}
 }
 
 // IngestTextRequest defines payload for JSON-based document text ingestion.
@@ -113,6 +117,36 @@ func (h *DocumentHandler) HandleIngest(c *gin.Context) {
 		filename = "uploaded_doc.txt"
 	}
 
+	// if queue is configured, enqueue for asynchronous background processing
+	if h.queue != nil {
+		payload := &ingest.IngestTaskPayload{
+			DocumentID:   docID,
+			Filename:     filename,
+			RawText:      content,
+			ChunkSize:    chunkSize,
+			ChunkOverlap: chunkOverlap,
+		}
+
+		taskStatus, err := h.queue.EnqueueIngest(c.Request.Context(), payload)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"code":    "enqueue_failed",
+					"message": err.Error(),
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusAccepted, gin.H{
+			"status":  "accepted",
+			"message": "document ingestion queued asynchronously",
+			"data":    taskStatus,
+		})
+		return
+	}
+
+	// fallback for synchronous processing if queue is not initialized
 	cfg := ingest.ChunkingConfig{
 		ChunkSize:    chunkSize,
 		ChunkOverlap: chunkOverlap,
@@ -135,9 +169,49 @@ func (h *DocumentHandler) HandleIngest(c *gin.Context) {
 	})
 }
 
+// HandleGetTaskStatus handles GET /v1/documents/tasks/:id for polling task progress.
+func (h *DocumentHandler) HandleGetTaskStatus(c *gin.Context) {
+	taskID := c.Param("id")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"code":    "missing_task_id",
+				"message": "task id parameter is required",
+			},
+		})
+		return
+	}
+
+	if h.queue == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"error": gin.H{
+				"code":    "queue_not_configured",
+				"message": "task status polling is unconfigured",
+			},
+		})
+		return
+	}
+
+	status, err := h.queue.GetTaskStatus(c.Request.Context(), taskID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": gin.H{
+				"code":    "task_not_found",
+				"message": err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   status,
+	})
+}
+
 // HandleListDocuments handles GET /v1/documents.
 func (h *DocumentHandler) HandleListDocuments(c *gin.Context) {
-	docs := h.pipeline.ListDocuments()
+	docs := h.pipeline.ListDocuments(c.Request.Context())
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   docs,

@@ -16,6 +16,21 @@ services:
       - redis
     restart: always
 
+  worker:
+    build:
+      context: .
+      dockerfile: cmd/worker/Dockerfile
+    container_name: ingest_worker
+    environment:
+      - CONFIG_PATH=config.yaml
+      - REDIS_ADDR=redis:6379
+      - VECTOR_SERVICE_ADDR=vector_service:50051
+    depends_on:
+      - redis
+      - vector_service
+    restart: always
+
+
   redis:
     image: redis:7-alpine
     container_name: gateway_redis

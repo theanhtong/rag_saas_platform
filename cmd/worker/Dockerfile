@@ -10,15 +10,14 @@ COPY vendor/ vendor/
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /app/vector_service ./cmd/vector_service
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /app/worker ./cmd/worker
 
 # Final runtime stage
 FROM alpine:3.19
 
 WORKDIR /app
 
-COPY --from=builder /app/vector_service /app/vector_service
+COPY --from=builder /app/worker /app/worker
+COPY --from=builder /app/config.yaml /app/config.yaml
 
-EXPOSE 50051
-
-ENTRYPOINT ["/app/vector_service"]
+ENTRYPOINT ["/app/worker"]
