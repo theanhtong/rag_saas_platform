@@ -17,6 +17,7 @@ import (
 	"github.com/theanhtong/rag_system/internal/client"
 	"github.com/theanhtong/rag_system/internal/embedder"
 	"github.com/theanhtong/rag_system/internal/router"
+	"github.com/theanhtong/rag_system/internal/service"
 )
 
 // ChatMessage represents an individual message in a chat conversation request.
@@ -57,15 +58,20 @@ type ChatHandler struct {
 	semanticCache  cache.SemanticCache
 	providerRouter router.ProviderRouter
 	embedder       embedder.EmbeddingService
+	ragService     service.RAGService
 }
 
 // NewChatHandler constructs a new ChatHandler instance.
-func NewChatHandler(vc client.VectorClient, sc cache.SemanticCache, pr router.ProviderRouter, emb embedder.EmbeddingService) *ChatHandler {
+func NewChatHandler(vc client.VectorClient, sc cache.SemanticCache, pr router.ProviderRouter, emb embedder.EmbeddingService, rs service.RAGService) *ChatHandler {
+	if rs == nil && vc != nil {
+		rs = service.NewRAGService(vc)
+	}
 	return &ChatHandler{
 		vectorClient:   vc,
 		semanticCache:  sc,
 		providerRouter: pr,
 		embedder:       emb,
+		ragService:     rs,
 	}
 }
 
@@ -138,38 +144,23 @@ func (h *ChatHandler) HandleChatCompletions(c *gin.Context) {
 
 	c.Header("X-Cache", "MISS")
 
-	// 2. RAG context retrieval via gRPC vector service
+	// 2. RAG context retrieval via RAGService
 	finalPrompt := lastPrompt
 	var ragCitations []string
 
-	if h.vectorClient != nil {
-		searchResp, err := h.vectorClient.SearchSimilarVectors(c.Request.Context(), promptVector, 3)
-		if err == nil && searchResp != nil && len(searchResp.Results) > 0 {
-			var sb strings.Builder
-			for i, res := range searchResp.Results {
-				content := strings.TrimSpace(res.Metadata["content"])
-				filename := res.Metadata["filename"]
-				if content != "" {
-					if filename != "" {
-						sb.WriteString(fmt.Sprintf("[%s]: %s\n", filename, content))
-						ragCitations = append(ragCitations, fmt.Sprintf("[%d] %s", i+1, filename))
-					} else {
-						sb.WriteString(content + "\n")
-					}
-				}
-			}
-			if sb.Len() > 0 {
-				sb.WriteString(lastPrompt)
-				finalPrompt = sb.String()
-			}
+	if h.ragService != nil {
+		ragRes, err := h.ragService.RetrieveContext(c.Request.Context(), lastPrompt, promptVector, 3)
+		if err == nil && ragRes != nil && ragRes.HasContext {
+			finalPrompt = ragRes.AugmentedPrompt
+			ragCitations = ragRes.Citations
 		}
 	}
 
 	if len(ragCitations) > 0 {
-		c.Header("X-RAG-Context", "ATTACHED")
-		c.Header("X-RAG-Citations", strings.Join(ragCitations, "; "))
+		c.Header("X-Rag-Context", "ATTACHED")
+		c.Header("X-Rag-Citations", strings.Join(ragCitations, "; "))
 	} else {
-		c.Header("X-RAG-Context", "NONE")
+		c.Header("X-Rag-Context", "NONE")
 	}
 
 	// 3. delegate to multi-provider LLM router

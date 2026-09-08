@@ -74,7 +74,8 @@ func main() {
 
 	// initialize HTTP handlers, quota service and rate limiter
 	quotaService := service.NewQuotaService(rdb)
-	chatHandler := handler.NewChatHandler(vectorClient, semanticCache, providerRouter, embeddingService)
+	ragService := service.NewRAGService(vectorClient)
+	chatHandler := handler.NewChatHandler(vectorClient, semanticCache, providerRouter, embeddingService, ragService)
 	docHandler := handler.NewDocumentHandler(ingestionPipeline, ingestQueue)
 	rateLimiter := middleware.NewRateLimiter(rdb, &cfg.RateLimit)
 

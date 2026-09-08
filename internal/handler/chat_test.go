@@ -34,7 +34,7 @@ func TestChatHandler_HandleChatCompletions(t *testing.T) {
 	})
 	pr := router.NewProviderRouter(&config.ProvidersConfig{OpenAIAPIKey: "sk-test-key"})
 	emb := embedder.NewEmbeddingService(nil)
-	chatHandler := NewChatHandler(nil, sc, pr, emb)
+	chatHandler := NewChatHandler(nil, sc, pr, emb, nil)
 
 	engine := gin.New()
 	engine.POST("/v1/chat/completions", chatHandler.HandleChatCompletions)
