@@ -76,7 +76,7 @@ func main() {
 	quotaService := service.NewQuotaService(rdb)
 	ragService := service.NewRAGService(vectorClient)
 	chatHandler := handler.NewChatHandler(vectorClient, semanticCache, providerRouter, embeddingService, ragService)
-	docHandler := handler.NewDocumentHandler(ingestionPipeline, ingestQueue)
+	docHandler := handler.NewDocumentHandler(ingestionPipeline, ingestQueue, semanticCache)
 	rateLimiter := middleware.NewRateLimiter(rdb, &cfg.RateLimit)
 
 	// setup Gin engine and global middlewares

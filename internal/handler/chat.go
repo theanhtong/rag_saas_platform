@@ -112,9 +112,14 @@ func (h *ChatHandler) HandleChatCompletions(c *gin.Context) {
 		promptVector = generatePromptEmbedding(lastPrompt)
 	}
 
+	tenantID := c.GetString("tenant_id")
+	if tenantID == "" {
+		tenantID = "global"
+	}
+
 	// 1. execute semantic prompt cache lookup
 	if h.semanticCache != nil {
-		if cachedHit, found, err := h.semanticCache.Get(c.Request.Context(), promptVector); err == nil && found {
+		if cachedHit, found, err := h.semanticCache.Get(c.Request.Context(), tenantID, promptVector); err == nil && found {
 			c.Header("X-Cache", "HIT")
 			c.Header("X-Cache-Similarity", fmt.Sprintf("%.4f", cachedHit.Similarity))
 
@@ -178,14 +183,14 @@ func (h *ChatHandler) HandleChatCompletions(c *gin.Context) {
 	c.Header("X-Provider-Used", providerUsed)
 
 	if req.Stream {
-		h.streamLiveResponse(c, req.Model, streamCh, promptVector, lastPrompt)
+		h.streamLiveResponse(c, req.Model, streamCh, promptVector, lastPrompt, tenantID)
 	} else {
-		h.respondNonStream(c, req.Model, streamCh, promptVector, lastPrompt)
+		h.respondNonStream(c, req.Model, streamCh, promptVector, lastPrompt, tenantID)
 	}
 }
 
 // streamLiveResponse proxies LLM stream chunks token-by-token directly to the client over Server-Sent Events.
-func (h *ChatHandler) streamLiveResponse(c *gin.Context, model string, ch <-chan router.ProviderStreamChunk, vector []float32, prompt string) {
+func (h *ChatHandler) streamLiveResponse(c *gin.Context, model string, ch <-chan router.ProviderStreamChunk, vector []float32, prompt string, tenantID string) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -250,7 +255,7 @@ func (h *ChatHandler) streamLiveResponse(c *gin.Context, model string, ch <-chan
 	// async cache-aside: persist complete response into SemanticCache
 	go func(resp string) {
 		if resp != "" && h.semanticCache != nil {
-			_ = h.semanticCache.Set(context.Background(), vector, prompt, resp)
+			_ = h.semanticCache.Set(context.Background(), tenantID, vector, prompt, resp)
 		}
 	}(fullResponse.String())
 }
@@ -285,7 +290,7 @@ func (h *ChatHandler) streamCachedResponse(c *gin.Context, model string, content
 }
 
 // respondNonStream collects all response chunks and returns a non-streaming JSON response object.
-func (h *ChatHandler) respondNonStream(c *gin.Context, model string, ch <-chan router.ProviderStreamChunk, vector []float32, prompt string) {
+func (h *ChatHandler) respondNonStream(c *gin.Context, model string, ch <-chan router.ProviderStreamChunk, vector []float32, prompt string, tenantID string) {
 	var fullResponse strings.Builder
 	var lastErr error
 	for chunk := range ch {
@@ -309,7 +314,7 @@ func (h *ChatHandler) respondNonStream(c *gin.Context, model string, ch <-chan r
 	respStr := fullResponse.String()
 	go func() {
 		if h.semanticCache != nil {
-			_ = h.semanticCache.Set(context.Background(), vector, prompt, respStr)
+			_ = h.semanticCache.Set(context.Background(), tenantID, vector, prompt, respStr)
 		}
 	}()
 

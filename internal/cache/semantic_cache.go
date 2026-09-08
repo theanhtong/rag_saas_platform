@@ -21,8 +21,9 @@ type CachedResponse struct {
 }
 
 type SemanticCache interface {
-	Get(ctx context.Context, vector []float32) (*CachedResponse, bool, error)
-	Set(ctx context.Context, vector []float32, prompt string, response string) error
+	Get(ctx context.Context, tenantID string, vector []float32) (*CachedResponse, bool, error)
+	Set(ctx context.Context, tenantID string, vector []float32, prompt string, response string) error
+	InvalidateTenantCache(ctx context.Context, tenantID string) error
 }
 
 type redisSemanticCache struct {
@@ -37,20 +38,40 @@ func NewSemanticCache(rdb *redis.Client, cfg *config.SemanticCacheConfig) Semant
 	}
 }
 
-func (c *redisSemanticCache) Get(ctx context.Context, vector []float32) (*CachedResponse, bool, error) {
+func (c *redisSemanticCache) Get(ctx context.Context, tenantID string, vector []float32) (*CachedResponse, bool, error) {
 	if len(vector) == 0 {
 		return nil, false, nil
 	}
 
-	keys, err := c.client.Keys(ctx, "semantic_cache:*").Result()
-	if err != nil || len(keys) == 0 {
+	if tenantID == "" {
+		tenantID = "global"
+	}
+
+	matchPattern := fmt.Sprintf("semantic_cache:%s:*", tenantID)
+	var keys []string
+	var cursor uint64
+
+	// use non-blocking SCAN instead of KEYS for production Redis scaling
+	for {
+		resKeys, nextCursor, err := c.client.Scan(ctx, cursor, matchPattern, 100).Result()
+		if err != nil {
+			break
+		}
+		keys = append(keys, resKeys...)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	if len(keys) == 0 {
 		return nil, false, nil
 	}
 
 	var bestMatch *CachedResponse
 	var maxSimilarity float64 = 0.0
 
-	// Scan entries to compute Cosine Similarity
+	// scan matching tenant entries to compute CosineSimilarity
 	for _, key := range keys {
 		val, err := c.client.Get(ctx, key).Result()
 		if err != nil {
@@ -77,7 +98,11 @@ func (c *redisSemanticCache) Get(ctx context.Context, vector []float32) (*Cached
 	return nil, false, nil
 }
 
-func (c *redisSemanticCache) Set(ctx context.Context, vector []float32, prompt string, response string) error {
+func (c *redisSemanticCache) Set(ctx context.Context, tenantID string, vector []float32, prompt string, response string) error {
+	if tenantID == "" {
+		tenantID = "global"
+	}
+
 	entry := CachedResponse{
 		Prompt:    prompt,
 		Response:  response,
@@ -90,13 +115,40 @@ func (c *redisSemanticCache) Set(ctx context.Context, vector []float32, prompt s
 		return fmt.Errorf("failed to marshal cache entry: %w", err)
 	}
 
-	key := fmt.Sprintf("semantic_cache:%d", time.Now().UnixNano())
+	key := fmt.Sprintf("semantic_cache:%s:%d", tenantID, time.Now().UnixNano())
 	ttl := time.Duration(c.cfg.TTLSeconds) * time.Second
 	if ttl <= 0 {
 		ttl = 3600 * time.Second
 	}
 
 	return c.client.Set(ctx, key, data, ttl).Err()
+}
+
+func (c *redisSemanticCache) InvalidateTenantCache(ctx context.Context, tenantID string) error {
+	if tenantID == "" {
+		tenantID = "global"
+	}
+
+	matchPattern := fmt.Sprintf("semantic_cache:%s:*", tenantID)
+	var cursor uint64
+
+	for {
+		keys, nextCursor, err := c.client.Scan(ctx, cursor, matchPattern, 100).Result()
+		if err != nil {
+			return fmt.Errorf("failed to scan keys for invalidation: %w", err)
+		}
+		if len(keys) > 0 {
+			if err := c.client.Del(ctx, keys...).Err(); err != nil {
+				return fmt.Errorf("failed to delete tenant cache keys: %w", err)
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return nil
 }
 
 // CosineSimilarity calculates the dot product divided by magnitude product.

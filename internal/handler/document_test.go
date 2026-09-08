@@ -25,7 +25,7 @@ func TestDocumentHandler_HandleIngestSync(t *testing.T) {
 	chunker := ingest.NewChunker()
 	emb := embedder.NewEmbeddingService(nil)
 	pipeline := ingest.NewPipeline(chunker, emb, nil, nil)
-	docHandler := NewDocumentHandler(pipeline, nil)
+	docHandler := NewDocumentHandler(pipeline, nil, nil)
 
 	engine := gin.New()
 	engine.POST("/v1/documents/ingest", docHandler.HandleIngest)
@@ -76,7 +76,7 @@ func TestDocumentHandler_HandleIngestAsyncAndTaskStatus(t *testing.T) {
 	emb := embedder.NewEmbeddingService(nil)
 	pipeline := ingest.NewPipeline(chunker, emb, nil, rdb)
 
-	docHandler := NewDocumentHandler(pipeline, queue)
+	docHandler := NewDocumentHandler(pipeline, queue, nil)
 
 	engine := gin.New()
 	engine.POST("/v1/documents/ingest", docHandler.HandleIngest)
