@@ -65,5 +65,14 @@ services:
       - ./scripts/init_vector_db.sql:/docker-entrypoint-initdb.d/init.sql
     restart: always
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: gateway_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: always
 
-
+volumes:
+  ollama_data:

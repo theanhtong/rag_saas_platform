@@ -21,6 +21,7 @@ import (
 	"github.com/theanhtong/rag_system/internal/ingest"
 	"github.com/theanhtong/rag_system/internal/middleware"
 	"github.com/theanhtong/rag_system/internal/router"
+	"github.com/theanhtong/rag_system/internal/service"
 )
 
 func main() {
@@ -60,7 +61,8 @@ func main() {
 	chunker := ingest.NewChunker()
 	ingestionPipeline := ingest.NewPipeline(chunker, embeddingService, vectorClient)
 
-	// initialize HTTP handlers and rate limiter
+	// initialize HTTP handlers, quota service and rate limiter
+	quotaService := service.NewQuotaService(rdb)
 	chatHandler := handler.NewChatHandler(vectorClient, semanticCache, providerRouter, embeddingService)
 	docHandler := handler.NewDocumentHandler(ingestionPipeline)
 	rateLimiter := middleware.NewRateLimiter(rdb, &cfg.RateLimit)
@@ -81,6 +83,7 @@ func main() {
 
 	// version 1 protected API routes
 	v1 := engine.Group("/v1")
+	v1.Use(middleware.MultiTenantAuthMiddleware(quotaService))
 	v1.Use(rateLimiter.Middleware())
 	{
 		v1.POST("/chat/completions", chatHandler.HandleChatCompletions)

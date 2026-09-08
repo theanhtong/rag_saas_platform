@@ -32,7 +32,7 @@ func TestChatHandler_HandleChatCompletions(t *testing.T) {
 		SimilarityThreshold: 0.85,
 		TTLSeconds:          3600,
 	})
-	pr := router.NewProviderRouter(&config.ProvidersConfig{})
+	pr := router.NewProviderRouter(&config.ProvidersConfig{OpenAIAPIKey: "sk-test-key"})
 	emb := embedder.NewEmbeddingService(nil)
 	chatHandler := NewChatHandler(nil, sc, pr, emb)
 
@@ -59,7 +59,7 @@ func TestChatHandler_HandleChatCompletions(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "MISS", w.Header().Get("X-Cache"))
-	assert.Contains(t, w.Body.String(), "Local SLM fallback")
+	assert.Contains(t, w.Body.String(), "[OpenAI]")
 
 	// wait briefly for asynchronous cache persistence goroutine
 	time.Sleep(50 * time.Millisecond)
