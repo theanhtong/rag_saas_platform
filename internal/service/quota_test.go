@@ -53,8 +53,7 @@ func TestQuotaService_ExceededLimit(t *testing.T) {
 	apiKey := "limited_key"
 	keyHash := HashAPIKey(apiKey)
 
-	// simulate exceeded USD usage in Redis
-	mr.Set("usage_usd:"+keyHash, "60.00")
+	_ = mr.Set("usage_usd:"+keyHash, "60.00")
 
 	_, err = qs.ValidateAPIKey(ctx, apiKey)
 	assert.ErrorIs(t, err, ErrQuotaExceeded)

@@ -157,7 +157,6 @@ func (s *quotaService) RecordTokenUsage(ctx context.Context, keyHash, provider, 
 }
 
 func (s *quotaService) CalculateCost(provider, model string, promptTokens, completionTokens int) float64 {
-	provider = strings.ToLower(provider)
 	model = strings.ToLower(model)
 
 	var promptRate, completionRate float64
