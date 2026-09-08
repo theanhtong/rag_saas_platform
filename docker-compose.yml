@@ -16,6 +16,21 @@ services:
       - redis
     restart: always
 
+  worker:
+    build:
+      context: .
+      dockerfile: cmd/worker/Dockerfile
+    container_name: ingest_worker
+    environment:
+      - CONFIG_PATH=config.yaml
+      - REDIS_ADDR=redis:6379
+      - VECTOR_SERVICE_ADDR=vector_service:50051
+    depends_on:
+      - redis
+      - vector_service
+    restart: always
+
+
   redis:
     image: redis:7-alpine
     container_name: gateway_redis
@@ -36,11 +51,21 @@ services:
     restart: always
 
   vector_service:
-    image: alpine:3.19
+    build:
+      context: .
+      dockerfile: cmd/vector_service/Dockerfile
     container_name: vector_service
-    command: tail -f /dev/null
     ports:
       - "50051:50051"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_db
+    depends_on:
+      - postgres
+    restart: always
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -55,5 +80,14 @@ services:
       - ./scripts/init_vector_db.sql:/docker-entrypoint-initdb.d/init.sql
     restart: always
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: gateway_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: always
 
-
+volumes:
+  ollama_data:

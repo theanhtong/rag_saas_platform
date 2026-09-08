@@ -4,6 +4,7 @@
 *.exe.*
 *.out
 *.app
+.agents/
 
 # Environment variables & secrets
 .env

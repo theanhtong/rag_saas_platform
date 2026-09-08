@@ -1,20 +1,20 @@
 # build stage
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
 # set GOPROXY fallback
-ENV GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=https://goproxy.io,https://proxy.golang.org,direct
 
-# copy dependency specs
+# copy dependency specs and vendor
 COPY go.mod go.sum ./
-RUN go mod download
+COPY vendor/ vendor/
 
 # copy source code
 COPY . .
 
 # build gateway binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/gateway ./cmd/gateway
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /app/gateway ./cmd/gateway
 
 # final stage
 FROM alpine:3.19

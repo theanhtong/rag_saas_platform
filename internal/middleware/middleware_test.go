@@ -18,20 +18,20 @@ func TestAuthMiddleware(t *testing.T) {
 		c.String(http.StatusOK, "Authorized")
 	})
 
-	// Case 1: Missing Key -> 401
+	// case 1: missing key -> 401
 	req1, _ := http.NewRequest(http.MethodGet, "/protected", nil)
 	w1 := httptest.NewRecorder()
 	router.ServeHTTP(w1, req1)
 	assert.Equal(t, http.StatusUnauthorized, w1.Code)
 
-	// Case 2: Valid X-API-Key -> 200
+	// case 2: valid X-API-Key -> 200
 	req2, _ := http.NewRequest(http.MethodGet, "/protected", nil)
 	req2.Header.Set("X-API-Key", "secret-key")
 	w2 := httptest.NewRecorder()
 	router.ServeHTTP(w2, req2)
 	assert.Equal(t, http.StatusOK, w2.Code)
 
-	// Case 3: Valid Bearer Token -> 200
+	// case 3: valid Bearer token -> 200
 	req3, _ := http.NewRequest(http.MethodGet, "/protected", nil)
 	req3.Header.Set("Authorization", "Bearer secret-key")
 	w3 := httptest.NewRecorder()
@@ -48,7 +48,7 @@ func TestCORSMiddleware(t *testing.T) {
 		c.String(http.StatusOK, "OK")
 	})
 
-	// Preflight OPTIONS request
+	// preflight OPTIONS request
 	req, _ := http.NewRequest(http.MethodOptions, "/cors", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -56,4 +56,21 @@ func TestCORSMiddleware(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code)
 	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
 	assert.Equal(t, "true", w.Header().Get("Access-Control-Allow-Credentials"))
+}
+
+func TestMultiTenantAuthMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(MultiTenantAuthMiddleware(nil))
+	router.GET("/v1/test", func(c *gin.Context) {
+		c.String(http.StatusOK, "OK")
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/v1/test", nil)
+	req.Header.Set("X-API-Key", "sample-key")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
 }

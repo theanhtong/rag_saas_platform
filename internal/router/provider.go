@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -57,30 +58,51 @@ func (r *providerRouter) GenerateStream(ctx context.Context, prompt string) (<-c
 		timeout = 3 * time.Second
 	}
 
-	// 1. Try Primary: OpenAI
-	ch, err := r.tryOpenAI(ctx, prompt, timeout)
-	if err == nil {
-		return ch, "openai", nil
+	openAIKey := strings.TrimSpace(r.cfg.OpenAIAPIKey)
+	geminiKey := strings.TrimSpace(r.cfg.GeminiAPIKey)
+
+	// 1. try primary: OpenAI
+	if openAIKey != "" {
+		ch, err := r.tryOpenAI(ctx, prompt, timeout)
+		if err == nil {
+			log.Printf("[ROUTER] provider OpenAI succeeded")
+			return ch, "openai", nil
+		}
+		log.Printf("[ROUTER] provider OpenAI failed: %v, falling back...", err)
 	}
 
-	// 2. Fallback to Secondary: Gemini
-	ch, err = r.tryGemini(ctx, prompt, timeout)
-	if err == nil {
-		return ch, "gemini", nil
+	// 2. fallback to secondary: Gemini
+	if geminiKey != "" {
+		ch, err := r.tryGemini(ctx, prompt, timeout)
+		if err == nil {
+			log.Printf("[ROUTER] provider Gemini succeeded")
+			return ch, "gemini", nil
+		}
+		log.Printf("[ROUTER] provider Gemini failed: %v, falling back...", err)
 	}
 
-	// 3. Fallback to Local SLM / Mock
+	// 3. fallback to local Ollama LLM
+	ch, err := r.tryOllama(ctx, prompt, timeout)
+	if err == nil {
+		log.Printf("[ROUTER] provider Ollama succeeded")
+		return ch, "ollama", nil
+	}
+	log.Printf("[ROUTER] provider Ollama failed: %v, falling back...", err)
+
+	// 4. fallback to local SLM synthesizer
 	ch, err = r.tryLocalSLM(ctx, prompt)
 	if err == nil {
+		log.Printf("[ROUTER] provider Local SLM succeeded")
 		return ch, "local-slm", nil
 	}
+	log.Printf("[ROUTER] provider Local SLM failed: %v", err)
 
-	return nil, "", errors.New("all LLM providers failed or timed out")
+	return nil, "", errors.New("all configured LLM providers failed or timed out")
 }
 
 func (r *providerRouter) tryOpenAI(ctx context.Context, prompt string, timeout time.Duration) (<-chan ProviderStreamChunk, error) {
 	res, err := r.openAICB.Execute(func() (interface{}, error) {
-		if r.cfg.OpenAIAPIKey == "" {
+		if strings.TrimSpace(r.cfg.OpenAIAPIKey) == "" {
 			return nil, errors.New("openai api key unconfigured")
 		}
 		// Simulated upstream API stream call
@@ -115,53 +137,53 @@ func (r *providerRouter) tryGemini(ctx context.Context, prompt string, timeout t
 			return nil, errors.New("gemini api key unconfigured")
 		}
 
+		url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=%s", apiKey)
+		reqBody := map[string]interface{}{
+			"contents": []map[string]interface{}{
+				{
+					"parts": []map[string]interface{}{
+						{"text": prompt},
+					},
+				},
+			},
+		}
+
+		jsonBytes, err := json.Marshal(reqBody)
+		if err != nil {
+			return nil, err
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBytes))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		httpClient := &http.Client{Timeout: timeout}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("gemini request failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("gemini API error (status %d): %s", resp.StatusCode, string(bodyBytes))
+		}
+
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, readErr
+		}
+
+		genText, err := extractGeminiText(bodyBytes)
+		if err != nil || strings.TrimSpace(genText) == "" {
+			return nil, fmt.Errorf("empty or invalid text in gemini response: %v", err)
+		}
+
 		ch := make(chan ProviderStreamChunk)
 		go func() {
 			defer close(ch)
-
-			url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=%s", apiKey)
-			reqBody := map[string]interface{}{
-				"contents": []map[string]interface{}{
-					{
-						"parts": []map[string]interface{}{
-							{"text": prompt},
-						},
-					},
-				},
-			}
-
-			jsonBytes, err := json.Marshal(reqBody)
-			if err != nil {
-				ch <- ProviderStreamChunk{Error: err}
-				return
-			}
-
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBytes))
-			if err != nil {
-				ch <- ProviderStreamChunk{Error: err}
-				return
-			}
-			req.Header.Set("Content-Type", "application/json")
-
-			httpClient := &http.Client{Timeout: timeout}
-			resp, err := httpClient.Do(req)
-			var genText string
-
-			if err == nil && resp.StatusCode == http.StatusOK {
-				bodyBytes, readErr := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				if readErr == nil {
-					genText, _ = extractGeminiText(bodyBytes)
-				}
-			} else if resp != nil {
-				resp.Body.Close()
-			}
-
-			if strings.TrimSpace(genText) == "" {
-				// Fallback: extract context or synthesize answer directly
-				genText = synthesizeRAGResponse(prompt)
-			}
-
 			streamTextPreservingNewlines(ctx, ch, genText, 15*time.Millisecond)
 		}()
 		return ch, nil
@@ -213,6 +235,66 @@ func extractGeminiText(data []byte) (string, error) {
 	}
 
 	return "", fmt.Errorf("could not extract text from gemini response: %s", string(data))
+}
+
+func (r *providerRouter) tryOllama(ctx context.Context, prompt string, timeout time.Duration) (<-chan ProviderStreamChunk, error) {
+	endpoints := []string{
+		"http://gateway_ollama:11434/api/generate",
+		"http://host.docker.internal:11434/api/generate",
+		"http://localhost:11434/api/generate",
+	}
+
+	reqBody := map[string]interface{}{
+		"model":  "qwen2.5:0.5b",
+		"prompt": prompt,
+		"stream": false,
+	}
+	jsonBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ep := range endpoints {
+		reqCtx, cancel := context.WithTimeout(ctx, timeout)
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, ep, bytes.NewBuffer(jsonBytes))
+		if err != nil {
+			cancel()
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		httpClient := &http.Client{Timeout: timeout}
+		resp, err := httpClient.Do(req)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			cancel()
+			continue
+		}
+
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		cancel()
+
+		if readErr != nil {
+			continue
+		}
+
+		var ollamaResp struct {
+			Response string `json:"response"`
+		}
+		if err := json.Unmarshal(bodyBytes, &ollamaResp); err == nil && strings.TrimSpace(ollamaResp.Response) != "" {
+			ch := make(chan ProviderStreamChunk)
+			go func() {
+				defer close(ch)
+				streamTextPreservingNewlines(ctx, ch, ollamaResp.Response, 15*time.Millisecond)
+			}()
+			return ch, nil
+		}
+	}
+
+	return nil, errors.New("ollama service unavailable or model not found")
 }
 
 func (r *providerRouter) tryLocalSLM(ctx context.Context, prompt string) (<-chan ProviderStreamChunk, error) {
