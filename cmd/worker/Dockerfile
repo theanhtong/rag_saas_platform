@@ -6,11 +6,11 @@ WORKDIR /app
 ENV GOPROXY=https://goproxy.io,https://proxy.golang.org,direct
 
 COPY go.mod go.sum ./
-COPY vendor/ vendor/
+RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /app/worker ./cmd/worker
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/worker ./cmd/worker
 
 # Final runtime stage
 FROM alpine:3.19

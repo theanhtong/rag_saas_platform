@@ -6,15 +6,15 @@ WORKDIR /app
 # set GOPROXY fallback
 ENV GOPROXY=https://goproxy.io,https://proxy.golang.org,direct
 
-# copy dependency specs and vendor
+# download dependencies
 COPY go.mod go.sum ./
-COPY vendor/ vendor/
+RUN go mod download
 
 # copy source code
 COPY . .
 
 # build gateway binary
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -ldflags="-w -s" -o /app/gateway ./cmd/gateway
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/gateway ./cmd/gateway
 
 # final stage
 FROM alpine:3.19
